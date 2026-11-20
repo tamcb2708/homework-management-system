@@ -1,0 +1,1107 @@
+// Homework Management System – Prisma schema
+// Conventions (docs/database-design.md):
+//  * Every tenant-scoped table has tenant_id + UNIQUE(tenant_id, id) and Row-Level Security (see migrations SQL).
+//  * Relations between tenant tables are composite (tenant_id, x_id) -> x(tenant_id, id) so the database rejects
+//    cross-tenant links even if application code is wrong.
+//  * Scores: Decimal(8,2). Money: BigInt micro-USD. Timestamps: timestamptz (UTC).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED
+  DISABLED
+}
+
+enum Role {
+  SCHOOL_ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+  PLATFORM
+}
+
+enum FilePurpose {
+  ASSIGNMENT_ATTACHMENT
+  QUESTION_MEDIA
+  ANSWER_UPLOAD
+  EXPORT
+}
+
+enum FileStatus {
+  ACTIVE
+  DELETED
+}
+
+enum AssignmentStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  REVOKED
+  ARCHIVED
+}
+
+enum TargetType {
+  CLASS
+  STUDENT
+  GROUP
+}
+
+enum AnswerVisibility {
+  NEVER
+  AFTER_SUBMIT
+  AFTER_DUE
+  AFTER_PUBLISH
+}
+
+enum GradingPolicy {
+  LATEST
+  HIGHEST
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+  ESSAY
+  FILE_UPLOAD
+}
+
+enum SubmissionStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADING
+  GRADED
+  PUBLISHED
+  RETURNED
+}
+
+enum SubmissionSource {
+  STUDENT
+  AUTO_TIMEOUT
+}
+
+enum GradeStatus {
+  IN_PROGRESS
+  GRADED
+  PUBLISHED
+}
+
+enum GradeItemStatus {
+  AUTO_GRADED
+  NEEDS_MANUAL
+  AI_PENDING
+  AI_SUGGESTED
+  FINAL
+}
+
+enum GradeSource {
+  AUTO
+  TEACHER
+}
+
+enum GradeChangeType {
+  AUTO_GRADED
+  MANUAL_SET
+  AI_ACCEPTED
+  AI_MODIFIED
+  OVERRIDE_AUTO
+  REGRADE_KEY_CHANGE
+  PUBLISHED
+  FEEDBACK_EDITED
+}
+
+enum AiJobStatus {
+  QUEUED
+  PROCESSING
+  RETRYING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationType {
+  ASSIGNMENT_PUBLISHED
+  ASSIGNMENT_DUE_SOON
+  SUBMISSION_RECEIVED
+  GRADE_PUBLISHED
+  GRADE_UPDATED
+  SUBMISSION_RETURNED
+  AI_GRADING_FINISHED
+  AI_BUDGET_ALERT
+  SYSTEM
+}
+
+// ───────────────────────────── Platform (no tenant_id, no RLS) ─────────────────────────────
+
+model Tenant {
+  id              String       @id @default(uuid()) @db.Uuid
+  slug            String       @unique @db.Citext
+  name            String
+  status          TenantStatus @default(ACTIVE)
+  timezone        String       @default("Asia/Ho_Chi_Minh")
+  locale          String       @default("vi-VN")
+  maxUsers        Int?         @map("max_users")
+  maxStorageBytes BigInt?      @map("max_storage_bytes")
+  suspendedAt     DateTime?    @map("suspended_at") @db.Timestamptz(6)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  settings          TenantSettings?
+  users             User[]
+  userRoles         UserRole[]
+  authSessions      AuthSession[]
+  students          Student[]
+  teachers          Teacher[]
+  schoolYears       SchoolYear[]
+  semesters         Semester[]
+  subjects          Subject[]
+  classes           Class[]
+  classStudents     ClassStudent[]
+  classTeachers     ClassTeacher[]
+  files             FileObject[]
+  assignments       Assignment[]
+  assignmentTargets AssignmentTarget[]
+  assignmentFiles   AssignmentAttachment[]
+  rubrics           Rubric[]
+  rubricCriteria    RubricCriterion[]
+  questions         Question[]
+  questionOptions   QuestionOption[]
+  questionFiles     QuestionAttachment[]
+  submissions       Submission[]
+  versions          SubmissionVersion[]
+  answers           SubmissionAnswer[]
+  answerFiles       SubmissionAttachment[]
+  grades            Grade[]
+  gradeDetails      GradeDetail[]
+  gradeCriteria     GradeDetailCriterion[]
+  gradeHistory      GradeHistory[]
+  aiRequests        AiGradingRequest[]
+  aiJobs            AiGradingJob[]
+  aiResults         AiGradingResult[]
+  aiBudgets         AiBudgetPeriod[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+
+  @@map("tenants")
+}
+
+model PlatformUser {
+  id               String     @id @default(uuid()) @db.Uuid
+  email            String     @unique @db.Citext
+  fullName         String     @map("full_name")
+  passwordHash     String     @map("password_hash")
+  status           UserStatus @default(ACTIVE)
+  failedLoginCount Int        @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sessions PlatformSession[]
+
+  @@map("platform_users")
+}
+
+model PlatformSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  platformUserId   String    @map("platform_user_id") @db.Uuid
+  familyId         String    @map("family_id") @db.Uuid
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  replacedAt       DateTime? @map("replaced_at") @db.Timestamptz(6)
+  ip               String?
+  userAgent        String?   @map("user_agent")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user PlatformUser @relation(fields: [platformUserId], references: [id])
+
+  @@map("platform_sessions")
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("platform_settings")
+}
+
+model PlatformAuditLog {
+  id                  String   @id @default(uuid()) @db.Uuid
+  actorPlatformUserId String?  @map("actor_platform_user_id") @db.Uuid
+  action              String
+  targetTenantId      String?  @map("target_tenant_id") @db.Uuid
+  resourceType        String?  @map("resource_type")
+  resourceId          String?  @map("resource_id")
+  metadata            Json?
+  ip                  String?
+  requestId           String?  @map("request_id")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt(sort: Desc)])
+  @@map("platform_audit_logs")
+}
+
+// ───────────────────────────── Tenant: settings & identity ─────────────────────────────
+
+model TenantSettings {
+  tenantId                String   @id @map("tenant_id") @db.Uuid
+  fileAllowedTypes        String[] @default(["pdf", "docx", "xlsx", "pptx", "jpg", "png"]) @map("file_allowed_types")
+  fileMaxBytes            Int      @default(20971520) @map("file_max_bytes")
+  filesPerAnswer          Int      @default(10) @map("files_per_answer")
+  submitGraceSeconds      Int      @default(30) @map("submit_grace_seconds")
+  scoreStep               Decimal  @default(0.25) @map("score_step") @db.Decimal(4, 2)
+  aiEnabled               Boolean  @default(false) @map("ai_enabled")
+  aiApprovalRef           String?  @map("ai_approval_ref")
+  aiApprovedByName        String?  @map("ai_approved_by_name")
+  aiApprovedAt            DateTime? @map("ai_approved_at") @db.Timestamptz(6)
+  aiMonthlyLimitMicros    BigInt?  @map("ai_monthly_limit_micros")
+  aiAlertThresholds       Int[]    @default([50, 80, 100]) @map("ai_alert_thresholds")
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_settings")
+}
+
+model User {
+  id                 String     @id @default(uuid()) @db.Uuid
+  tenantId           String     @map("tenant_id") @db.Uuid
+  username           String     @db.Citext
+  email              String?    @db.Citext
+  fullName           String     @map("full_name")
+  phone              String?
+  passwordHash       String     @map("password_hash")
+  status             UserStatus @default(ACTIVE)
+  mustChangePassword Boolean    @default(true) @map("must_change_password")
+  passwordChangedAt  DateTime?  @map("password_changed_at") @db.Timestamptz(6)
+  failedLoginCount   Int        @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?  @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt        DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  authzVersion       Int        @default(1) @map("authz_version")
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  roles         UserRole[]
+  sessions      AuthSession[]
+  student       Student?
+  teacher       Teacher?
+  notifications Notification[]
+  files         FileObject[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, username])
+  @@unique([tenantId, email])
+  @@index([tenantId, status])
+  @@map("users")
+}
+
+model UserRole {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      Role
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id])
+
+  @@id([userId, role])
+  @@index([tenantId, role])
+  @@map("user_roles")
+}
+
+model AuthSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  familyId         String    @map("family_id") @db.Uuid
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  absoluteExpiresAt DateTime @map("absolute_expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokeReason     String?   @map("revoke_reason")
+  replacedAt       DateTime? @map("replaced_at") @db.Timestamptz(6)
+  ip               String?
+  userAgent        String?   @map("user_agent")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@index([tenantId, userId])
+  @@map("auth_sessions")
+}
+
+model Student {
+  userId      String    @id @map("user_id") @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  studentCode String    @map("student_code") @db.Citext
+  dateOfBirth DateTime? @map("date_of_birth") @db.Date
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  user        User               @relation(fields: [tenantId, userId], references: [tenantId, id])
+  enrollments ClassStudent[]
+  targets     AssignmentTarget[]
+  submissions Submission[]
+
+  @@unique([tenantId, userId])
+  @@unique([tenantId, studentCode])
+  @@map("students")
+}
+
+model Teacher {
+  userId         String   @id @map("user_id") @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  teacherCode    String?  @map("teacher_code") @db.Citext
+  specialization String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  user             User           @relation(fields: [tenantId, userId], references: [tenantId, id])
+  teaching         ClassTeacher[]
+  homeroomClasses  Class[]
+  assignments      Assignment[]
+  rubrics          Rubric[]
+
+  @@unique([tenantId, userId])
+  @@unique([tenantId, teacherCode])
+  @@map("teachers")
+}
+
+// ───────────────────────────── Tenant: academics ─────────────────────────────
+
+model SchoolYear {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  isCurrent Boolean  @default(false) @map("is_current")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  semesters Semester[]
+  classes   Class[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, name])
+  @@map("school_years")
+}
+
+model Semester {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  schoolYearId String   @map("school_year_id") @db.Uuid
+  name         String
+  ordinal      Int
+  startDate    DateTime @map("start_date") @db.Date
+  endDate      DateTime @map("end_date") @db.Date
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id])
+  schoolYear SchoolYear     @relation(fields: [tenantId, schoolYearId], references: [tenantId, id])
+  teaching   ClassTeacher[]
+
+  @@unique([tenantId, id])
+  @@unique([schoolYearId, ordinal])
+  @@map("semesters")
+}
+
+model Subject {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  code       String    @db.Citext
+  name       String
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id])
+  teaching    ClassTeacher[]
+  assignments Assignment[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, code])
+  @@map("subjects")
+}
+
+model Class {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  schoolYearId      String    @map("school_year_id") @db.Uuid
+  code              String    @db.Citext
+  name              String
+  gradeLevel        Int?      @map("grade_level") @db.SmallInt
+  homeroomTeacherId String?   @map("homeroom_teacher_id") @db.Uuid
+  archivedAt        DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  schoolYear      SchoolYear         @relation(fields: [tenantId, schoolYearId], references: [tenantId, id])
+  homeroomTeacher Teacher?           @relation(fields: [tenantId, homeroomTeacherId], references: [tenantId, userId])
+  students        ClassStudent[]
+  teachers        ClassTeacher[]
+  targets         AssignmentTarget[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, schoolYearId, code])
+  @@map("classes")
+}
+
+model ClassStudent {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  classId   String    @map("class_id") @db.Uuid
+  studentId String    @map("student_id") @db.Uuid
+  joinedAt  DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+  leftAt    DateTime? @map("left_at") @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  class   Class   @relation(fields: [tenantId, classId], references: [tenantId, id])
+  student Student @relation(fields: [tenantId, studentId], references: [tenantId, userId])
+
+  @@unique([tenantId, id])
+  @@index([tenantId, studentId])
+  @@index([classId])
+  @@map("class_students")
+}
+
+model ClassTeacher {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  classId      String    @map("class_id") @db.Uuid
+  teacherId    String    @map("teacher_id") @db.Uuid
+  subjectId    String    @map("subject_id") @db.Uuid
+  semesterId   String?   @map("semester_id") @db.Uuid
+  assignedAt   DateTime  @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  unassignedAt DateTime? @map("unassigned_at") @db.Timestamptz(6)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  class    Class     @relation(fields: [tenantId, classId], references: [tenantId, id])
+  teacher  Teacher   @relation(fields: [tenantId, teacherId], references: [tenantId, userId])
+  subject  Subject   @relation(fields: [tenantId, subjectId], references: [tenantId, id])
+  semester Semester? @relation(fields: [tenantId, semesterId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@index([tenantId, teacherId])
+  @@index([classId])
+  @@map("class_teachers")
+}
+
+// ───────────────────────────── Tenant: files ─────────────────────────────
+
+model FileObject {
+  id           String      @id @default(uuid()) @db.Uuid
+  tenantId     String      @map("tenant_id") @db.Uuid
+  storageKey   String      @unique @map("storage_key")
+  originalName String      @map("original_name")
+  mimeType     String      @map("mime_type")
+  extension    String
+  sizeBytes    Int         @map("size_bytes")
+  sha256       String
+  purpose      FilePurpose
+  status       FileStatus  @default(ACTIVE)
+  uploadedBy   String      @map("uploaded_by") @db.Uuid
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt    DateTime?   @map("deleted_at") @db.Timestamptz(6)
+
+  tenant              Tenant                 @relation(fields: [tenantId], references: [id])
+  uploader            User                   @relation(fields: [tenantId, uploadedBy], references: [tenantId, id])
+  assignmentLinks     AssignmentAttachment[]
+  questionLinks       QuestionAttachment[]
+  submissionLinks     SubmissionAttachment[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, uploadedBy])
+  @@map("files")
+}
+
+// ───────────────────────────── Tenant: assignments & questions ─────────────────────────────
+
+model Assignment {
+  id               String           @id @default(uuid()) @db.Uuid
+  tenantId         String           @map("tenant_id") @db.Uuid
+  subjectId        String           @map("subject_id") @db.Uuid
+  ownerTeacherId   String           @map("owner_teacher_id") @db.Uuid
+  createdBy        String           @map("created_by") @db.Uuid
+  title            String
+  description      String?
+  instructions     String?
+  topic            String?
+  status           AssignmentStatus @default(DRAFT)
+  openAt           DateTime?        @map("open_at") @db.Timestamptz(6)
+  dueAt            DateTime?        @map("due_at") @db.Timestamptz(6)
+  allowLate        Boolean          @default(false) @map("allow_late")
+  lateUntil        DateTime?        @map("late_until") @db.Timestamptz(6)
+  timeLimitMinutes Int?             @map("time_limit_minutes")
+  allowResubmit    Boolean          @default(false) @map("allow_resubmit")
+  maxAttempts      Int              @default(1) @map("max_attempts") @db.SmallInt
+  gradingPolicy    GradingPolicy    @default(LATEST) @map("grading_policy")
+  maxScore         Decimal          @default(0) @map("max_score") @db.Decimal(8, 2)
+  passScore        Decimal?         @map("pass_score") @db.Decimal(8, 2)
+  answerVisibility AnswerVisibility @default(AFTER_PUBLISH) @map("answer_visibility")
+  aiGradingAllowed Boolean          @default(false) @map("ai_grading_allowed")
+  aiFeedbackVisible Boolean         @default(false) @map("ai_feedback_visible")
+  publishedAt      DateTime?        @map("published_at") @db.Timestamptz(6)
+  revokedAt        DateTime?        @map("revoked_at") @db.Timestamptz(6)
+  archivedAt       DateTime?        @map("archived_at") @db.Timestamptz(6)
+  dueReminderSentAt DateTime?       @map("due_reminder_sent_at") @db.Timestamptz(6)
+  lockVersion      Int              @default(0) @map("lock_version")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(6)
+
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id])
+  subject     Subject                @relation(fields: [tenantId, subjectId], references: [tenantId, id])
+  owner       Teacher                @relation(fields: [tenantId, ownerTeacherId], references: [tenantId, userId])
+  targets     AssignmentTarget[]
+  attachments AssignmentAttachment[]
+  questions   Question[]
+  submissions Submission[]
+  aiRequests  AiGradingRequest[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, ownerTeacherId, status])
+  @@index([tenantId, subjectId])
+  @@map("assignments")
+}
+
+model AssignmentTarget {
+  id           String     @id @default(uuid()) @db.Uuid
+  tenantId     String     @map("tenant_id") @db.Uuid
+  assignmentId String     @map("assignment_id") @db.Uuid
+  targetType   TargetType @map("target_type")
+  classId      String?    @map("class_id") @db.Uuid
+  studentId    String?    @map("student_id") @db.Uuid
+  groupId      String?    @map("group_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  assignment Assignment @relation(fields: [tenantId, assignmentId], references: [tenantId, id])
+  class      Class?     @relation(fields: [tenantId, classId], references: [tenantId, id])
+  student    Student?   @relation(fields: [tenantId, studentId], references: [tenantId, userId])
+
+  @@unique([tenantId, id])
+  @@index([tenantId, classId])
+  @@index([tenantId, studentId])
+  @@index([assignmentId])
+  @@map("assignment_targets")
+}
+
+model AssignmentAttachment {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  assignmentId String   @map("assignment_id") @db.Uuid
+  fileId       String   @map("file_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  assignment Assignment @relation(fields: [tenantId, assignmentId], references: [tenantId, id])
+  file       FileObject @relation(fields: [tenantId, fileId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@unique([assignmentId, fileId])
+  @@map("assignment_attachments")
+}
+
+model Rubric {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  ownerTeacherId    String    @map("owner_teacher_id") @db.Uuid
+  name              String
+  version           Int       @default(1)
+  previousVersionId String?   @map("previous_version_id") @db.Uuid
+  lockedAt          DateTime? @map("locked_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id])
+  owner     Teacher           @relation(fields: [tenantId, ownerTeacherId], references: [tenantId, userId])
+  criteria  RubricCriterion[]
+  questions Question[]
+
+  @@unique([tenantId, id])
+  @@map("grading_rubrics")
+}
+
+model RubricCriterion {
+  id          String  @id @default(uuid()) @db.Uuid
+  tenantId    String  @map("tenant_id") @db.Uuid
+  rubricId    String  @map("rubric_id") @db.Uuid
+  ordinal     Int
+  name        String
+  description String?
+  maxPoints   Decimal @map("max_points") @db.Decimal(8, 2)
+
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id])
+  rubric      Rubric                 @relation(fields: [tenantId, rubricId], references: [tenantId, id])
+  gradeScores GradeDetailCriterion[]
+
+  @@unique([tenantId, id])
+  @@unique([rubricId, ordinal])
+  @@map("rubric_criteria")
+}
+
+model Question {
+  id               String       @id @default(uuid()) @db.Uuid
+  tenantId         String       @map("tenant_id") @db.Uuid
+  assignmentId     String       @map("assignment_id") @db.Uuid
+  ordinal          Int
+  type             QuestionType
+  content          String
+  points           Decimal      @db.Decimal(8, 2)
+  isRequired       Boolean      @default(true) @map("is_required")
+  /// Type-specific settings (MC scoring, accepted short answers, file rules). Secret for students.
+  config           Json         @default("{}")
+  /// Reference answer for essays / AI. Secret for students until allowed.
+  referenceAnswer  String?      @map("reference_answer")
+  explanation      String?
+  rubricId         String?      @map("rubric_id") @db.Uuid
+  sourceQuestionId String?      @map("source_question_id") @db.Uuid
+  lockVersion      Int          @default(0) @map("lock_version")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  assignment   Assignment           @relation(fields: [tenantId, assignmentId], references: [tenantId, id])
+  rubric       Rubric?              @relation(fields: [tenantId, rubricId], references: [tenantId, id])
+  source       Question?            @relation("QuestionSource", fields: [tenantId, sourceQuestionId], references: [tenantId, id])
+  copies       Question[]           @relation("QuestionSource")
+  options      QuestionOption[]
+  attachments  QuestionAttachment[]
+  answers      SubmissionAnswer[]
+  answerFiles  SubmissionAttachment[]
+  gradeDetails GradeDetail[]
+  aiJobs       AiGradingJob[]
+
+  @@unique([tenantId, id])
+  @@index([assignmentId, ordinal])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  ordinal    Int
+  content    String
+  /// Secret for students.
+  isCorrect  Boolean  @default(false) @map("is_correct")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  question Question @relation(fields: [tenantId, questionId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@index([questionId, ordinal])
+  @@map("question_options")
+}
+
+model QuestionAttachment {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  fileId     String   @map("file_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id])
+  question Question   @relation(fields: [tenantId, questionId], references: [tenantId, id])
+  file     FileObject @relation(fields: [tenantId, fileId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@unique([questionId, fileId])
+  @@map("question_attachments")
+}
+
+// ───────────────────────────── Tenant: submissions ─────────────────────────────
+
+model Submission {
+  id               String           @id @default(uuid()) @db.Uuid
+  tenantId         String           @map("tenant_id") @db.Uuid
+  assignmentId     String           @map("assignment_id") @db.Uuid
+  studentId        String           @map("student_id") @db.Uuid
+  status           SubmissionStatus @default(IN_PROGRESS)
+  startedAt        DateTime         @default(now()) @map("started_at") @db.Timestamptz(6)
+  deadlineAt       DateTime?        @map("deadline_at") @db.Timestamptz(6)
+  /// Current draft: { [questionId]: answer }. Submitted answers are immutable rows in submission_answers.
+  draft            Json             @default("{}")
+  draftRevision    Int              @default(0) @map("draft_revision")
+  draftUpdatedAt   DateTime?        @map("draft_updated_at") @db.Timestamptz(6)
+  attemptCount     Int              @default(0) @map("attempt_count") @db.SmallInt
+  latestVersionId  String?          @map("latest_version_id") @db.Uuid
+  effectiveGradeId String?          @map("effective_grade_id") @db.Uuid
+  returnedAt       DateTime?        @map("returned_at") @db.Timestamptz(6)
+  returnedReason   String?          @map("returned_reason")
+  returnedDueAt    DateTime?        @map("returned_due_at") @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant     Tenant              @relation(fields: [tenantId], references: [id])
+  assignment Assignment          @relation(fields: [tenantId, assignmentId], references: [tenantId, id])
+  student    Student             @relation(fields: [tenantId, studentId], references: [tenantId, userId])
+  versions   SubmissionVersion[]
+  grades     Grade[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, assignmentId, studentId])
+  @@index([tenantId, studentId, status])
+  @@index([tenantId, assignmentId, status])
+  @@map("submissions")
+}
+
+model SubmissionVersion {
+  id             String           @id @default(uuid()) @db.Uuid
+  tenantId       String           @map("tenant_id") @db.Uuid
+  submissionId   String           @map("submission_id") @db.Uuid
+  versionNo      Int              @map("version_no") @db.SmallInt
+  submittedAt    DateTime         @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  source         SubmissionSource @default(STUDENT)
+  isLate         Boolean          @default(false) @map("is_late")
+  countsAsAttempt Boolean         @default(true) @map("counts_as_attempt")
+  idempotencyKey String           @map("idempotency_key")
+  contentHash    String           @map("content_hash")
+  submittedBy    String?          @map("submitted_by") @db.Uuid
+
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id])
+  submission  Submission             @relation(fields: [tenantId, submissionId], references: [tenantId, id])
+  answers     SubmissionAnswer[]
+  attachments SubmissionAttachment[]
+  grade       Grade?
+  aiJobs      AiGradingJob[]
+
+  @@unique([tenantId, id])
+  @@unique([submissionId, versionNo])
+  @@unique([submissionId, idempotencyKey])
+  @@map("submission_versions")
+}
+
+model SubmissionAnswer {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  versionId    String   @map("version_id") @db.Uuid
+  questionId   String   @map("question_id") @db.Uuid
+  answer       Json
+  answerText   String?  @map("answer_text")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  version  SubmissionVersion @relation(fields: [tenantId, versionId], references: [tenantId, id])
+  question Question          @relation(fields: [tenantId, questionId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@unique([versionId, questionId])
+  @@map("submission_answers")
+}
+
+model SubmissionAttachment {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  versionId  String   @map("version_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  fileId     String   @map("file_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  version  SubmissionVersion @relation(fields: [tenantId, versionId], references: [tenantId, id])
+  question Question          @relation(fields: [tenantId, questionId], references: [tenantId, id])
+  file     FileObject        @relation(fields: [tenantId, fileId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@unique([versionId, questionId, fileId])
+  @@map("submission_attachments")
+}
+
+// ───────────────────────────── Tenant: grading ─────────────────────────────
+
+model Grade {
+  id                  String      @id @default(uuid()) @db.Uuid
+  tenantId            String      @map("tenant_id") @db.Uuid
+  submissionId        String      @map("submission_id") @db.Uuid
+  submissionVersionId String      @map("submission_version_id") @db.Uuid
+  status              GradeStatus @default(IN_PROGRESS)
+  maxScore            Decimal     @map("max_score") @db.Decimal(8, 2)
+  earnedScore         Decimal?    @map("earned_score") @db.Decimal(8, 2)
+  passScore           Decimal?    @map("pass_score") @db.Decimal(8, 2)
+  passed              Boolean?
+  teacherFeedback     String?     @map("teacher_feedback")
+  aiFeedbackApproved  String?     @map("ai_feedback_approved")
+  gradedBy            String?     @map("graded_by") @db.Uuid
+  gradedAt            DateTime?   @map("graded_at") @db.Timestamptz(6)
+  publishedBy         String?     @map("published_by") @db.Uuid
+  publishedAt         DateTime?   @map("published_at") @db.Timestamptz(6)
+  lockVersion         Int         @default(0) @map("lock_version")
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id])
+  submission Submission        @relation(fields: [tenantId, submissionId], references: [tenantId, id])
+  version    SubmissionVersion @relation(fields: [tenantId, submissionVersionId], references: [tenantId, id])
+  details    GradeDetail[]
+  history    GradeHistory[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, submissionVersionId])
+  @@index([tenantId, submissionId])
+  @@index([tenantId, status])
+  @@map("grades")
+}
+
+model GradeDetail {
+  id                  String          @id @default(uuid()) @db.Uuid
+  tenantId            String          @map("tenant_id") @db.Uuid
+  gradeId             String          @map("grade_id") @db.Uuid
+  questionId          String          @map("question_id") @db.Uuid
+  status              GradeItemStatus
+  source              GradeSource?
+  maxScore            Decimal         @map("max_score") @db.Decimal(8, 2)
+  /// Official score only (AUTO or TEACHER). AI suggestions live in ai_grading_results.
+  earnedScore         Decimal?        @map("earned_score") @db.Decimal(8, 2)
+  feedback            String?
+  isMarkedWrong       Boolean         @default(false) @map("is_marked_wrong")
+  acceptedAiResultId  String?         @map("accepted_ai_result_id") @db.Uuid
+  finalizedBy         String?         @map("finalized_by") @db.Uuid
+  finalizedAt         DateTime?       @map("finalized_at") @db.Timestamptz(6)
+  lockVersion         Int             @default(0) @map("lock_version")
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant                 @relation(fields: [tenantId], references: [id])
+  grade     Grade                  @relation(fields: [tenantId, gradeId], references: [tenantId, id])
+  question  Question               @relation(fields: [tenantId, questionId], references: [tenantId, id])
+  criteria  GradeDetailCriterion[]
+  history   GradeHistory[]
+  aiJobs    AiGradingJob[]
+  aiResults AiGradingResult[]
+
+  @@unique([tenantId, id])
+  @@unique([gradeId, questionId])
+  @@index([tenantId, status])
+  @@map("grade_details")
+}
+
+model GradeDetailCriterion {
+  id                String  @id @default(uuid()) @db.Uuid
+  tenantId          String  @map("tenant_id") @db.Uuid
+  gradeDetailId     String  @map("grade_detail_id") @db.Uuid
+  rubricCriterionId String  @map("rubric_criterion_id") @db.Uuid
+  maxScore          Decimal @map("max_score") @db.Decimal(8, 2)
+  earnedScore       Decimal @map("earned_score") @db.Decimal(8, 2)
+  feedback          String?
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id])
+  detail    GradeDetail     @relation(fields: [tenantId, gradeDetailId], references: [tenantId, id])
+  criterion RubricCriterion @relation(fields: [tenantId, rubricCriterionId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@unique([gradeDetailId, rubricCriterionId])
+  @@map("grade_detail_criteria")
+}
+
+model GradeHistory {
+  id            String          @id @default(uuid()) @db.Uuid
+  tenantId      String          @map("tenant_id") @db.Uuid
+  gradeId       String          @map("grade_id") @db.Uuid
+  gradeDetailId String?         @map("grade_detail_id") @db.Uuid
+  changeType    GradeChangeType @map("change_type")
+  oldScore      Decimal?        @map("old_score") @db.Decimal(8, 2)
+  newScore      Decimal?        @map("new_score") @db.Decimal(8, 2)
+  oldFeedback   String?         @map("old_feedback")
+  newFeedback   String?         @map("new_feedback")
+  reason        String?
+  actorType     ActorType       @map("actor_type")
+  changedBy     String?         @map("changed_by") @db.Uuid
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id])
+  grade  Grade        @relation(fields: [tenantId, gradeId], references: [tenantId, id])
+  detail GradeDetail? @relation(fields: [tenantId, gradeDetailId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@index([tenantId, gradeId])
+  @@map("grade_history")
+}
+
+// ───────────────────────────── Tenant: AI grading (DISABLED until approval – D11) ─────────────────────────────
+
+model AiGradingRequest {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  assignmentId        String   @map("assignment_id") @db.Uuid
+  requestedBy         String   @map("requested_by") @db.Uuid
+  itemCount           Int      @map("item_count")
+  estimatedCostMicros BigInt   @map("estimated_cost_micros")
+  reservedMicros      BigInt   @map("reserved_micros")
+  status              String   @default("OPEN")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id])
+  assignment Assignment     @relation(fields: [tenantId, assignmentId], references: [tenantId, id])
+  jobs       AiGradingJob[]
+
+  @@unique([tenantId, id])
+  @@map("ai_grading_requests")
+}
+
+model AiGradingJob {
+  id                  String      @id @default(uuid()) @db.Uuid
+  tenantId            String      @map("tenant_id") @db.Uuid
+  requestId           String      @map("request_id") @db.Uuid
+  submissionVersionId String      @map("submission_version_id") @db.Uuid
+  questionId          String      @map("question_id") @db.Uuid
+  gradeDetailId       String      @map("grade_detail_id") @db.Uuid
+  status              AiJobStatus @default(QUEUED)
+  attempts            Int         @default(0)
+  idempotencyKey      String      @unique @map("idempotency_key")
+  provider            String
+  model               String?
+  promptVersion       String      @map("prompt_version")
+  reservedMicros      BigInt      @default(0) @map("reserved_micros")
+  actualCostMicros    BigInt      @default(0) @map("actual_cost_micros")
+  errorCode           String?     @map("error_code")
+  errorMessage        String?     @map("error_message")
+  queuedAt            DateTime    @default(now()) @map("queued_at") @db.Timestamptz(6)
+  startedAt           DateTime?   @map("started_at") @db.Timestamptz(6)
+  finishedAt          DateTime?   @map("finished_at") @db.Timestamptz(6)
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  request  AiGradingRequest  @relation(fields: [tenantId, requestId], references: [tenantId, id])
+  version  SubmissionVersion @relation(fields: [tenantId, submissionVersionId], references: [tenantId, id])
+  question Question          @relation(fields: [tenantId, questionId], references: [tenantId, id])
+  detail   GradeDetail       @relation(fields: [tenantId, gradeDetailId], references: [tenantId, id])
+  results  AiGradingResult[]
+
+  @@unique([tenantId, id])
+  @@index([status, queuedAt])
+  @@map("ai_grading_jobs")
+}
+
+model AiGradingResult {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  jobId              String   @map("job_id") @db.Uuid
+  gradeDetailId      String   @map("grade_detail_id") @db.Uuid
+  isValid            Boolean  @map("is_valid")
+  validationErrors   Json?    @map("validation_errors")
+  suggestedScore     Decimal? @map("suggested_score") @db.Decimal(8, 2)
+  maxScore           Decimal  @map("max_score") @db.Decimal(8, 2)
+  confidence         Decimal? @db.Decimal(4, 3)
+  criteria           Json?
+  strengths          Json?
+  weaknesses         Json?
+  missingPoints      Json?    @map("missing_points")
+  overallFeedback    String?  @map("overall_feedback")
+  needsTeacherReview Boolean  @default(true) @map("needs_teacher_review")
+  model              String?
+  promptVersion      String   @map("prompt_version")
+  inputTokens        Int      @default(0) @map("input_tokens")
+  outputTokens       Int      @default(0) @map("output_tokens")
+  costMicros         BigInt   @default(0) @map("cost_micros")
+  latencyMs          Int      @default(0) @map("latency_ms")
+  redactionSummary   Json?    @map("redaction_summary")
+  rawResponse        Json?    @map("raw_response")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id])
+  job    AiGradingJob @relation(fields: [tenantId, jobId], references: [tenantId, id])
+  detail GradeDetail  @relation(fields: [tenantId, gradeDetailId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@map("ai_grading_results")
+}
+
+model AiBudgetPeriod {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  periodStart    DateTime @map("period_start") @db.Date
+  limitMicros    BigInt   @map("limit_micros")
+  reservedMicros BigInt   @default(0) @map("reserved_micros")
+  spentMicros    BigInt   @default(0) @map("spent_micros")
+  alertsSent     Int[]    @default([]) @map("alerts_sent")
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, periodStart])
+  @@map("ai_budget_periods")
+}
+
+// ───────────────────────────── Tenant: notifications & audit ─────────────────────────────
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  tenantId  String           @map("tenant_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String
+  body      String?
+  link      String?
+  data      Json?
+  dedupeKey String?          @map("dedupe_key")
+  readAt    DateTime?        @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id                  String    @id @default(uuid()) @db.Uuid
+  tenantId            String    @map("tenant_id") @db.Uuid
+  actorType           ActorType @map("actor_type")
+  actorUserId         String?   @map("actor_user_id") @db.Uuid
+  actorPlatformUserId String?   @map("actor_platform_user_id") @db.Uuid
+  action              String
+  resourceType        String?   @map("resource_type")
+  resourceId          String?   @map("resource_id")
+  isSensitive         Boolean   @default(false) @map("is_sensitive")
+  reason              String?
+  metadata            Json?
+  ip                  String?
+  userAgent           String?   @map("user_agent")
+  requestId           String?   @map("request_id")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, resourceType, resourceId])
+  @@map("audit_logs")
+}
