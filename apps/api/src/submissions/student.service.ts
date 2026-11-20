@@ -100,8 +100,11 @@ export class StudentService {
         : s.status === 'RETURNED' ? returnedWindowOpen(a, s, now)
         : s.status === 'IN_PROGRESS' ? !!deadline && now.getTime() <= deadline.getTime() + (settings?.submitGraceSeconds ?? 30) * 1000
         : canResubmit(a, s, now);
+      const draftFileIds = s?.status === 'IN_PROGRESS' ? Object.values((s.draft ?? {}) as Record<string, any>).flatMap((v) => (Array.isArray(v?.fileIds) ? v.fileIds : [])) : [];
+      const draftFiles = draftFileIds.length ? await tx.fileObject.findMany({ where: { id: { in: draftFileIds }, uploadedBy: me, status: 'ACTIVE' } }) : [];
       return {
         serverNow: now,
+        draftFiles: draftFiles.map(fileView),
         assignment: {
           id: a.id, title: a.title, description: a.description, instructions: a.instructions, topic: a.topic,
           subject: { id: a.subject.id, name: a.subject.name }, teacher: a.owner.user.fullName,
