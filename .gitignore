@@ -1,0 +1,28 @@
+# Dependencies & build
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+.turbo/
+
+# Environment & secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Claude Code local settings
+.claude/settings.local.json
