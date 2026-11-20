@@ -1,3 +1,6 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -18,6 +21,8 @@ const csp = [
 
 const nextConfig = {
   output: 'standalone',
+  // Monorepo: trace dependencies from the workspace root so the standalone bundle is self-contained (Docker).
+  outputFileTracingRoot: join(dirname(fileURLToPath(import.meta.url)), '../../'),
   poweredByHeader: false,
   reactStrictMode: true,
   async headers() {

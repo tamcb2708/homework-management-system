@@ -9,7 +9,14 @@
         "name": "@nestjs/swagger",
         "options": {
           "introspectComments": true,
-          "classValidatorShim": true
+          "classValidatorShim": true,
+          "dtoFileNameSuffix": [
+            "dto.ts",
+            ".controller.ts"
+          ],
+          "controllerFileNameSuffix": [
+            ".controller.ts"
+          ]
         }
       }
     ],

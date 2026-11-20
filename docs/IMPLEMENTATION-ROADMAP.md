@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-> Cập nhật: 2026-11-20 · Nhánh làm việc: `feat/mvp-implementation` · Repository: `tamcb2708/homework-management-system`
+> Cập nhật: 2026-11-21 · Nhánh làm việc: `feat/mvp-implementation` · Repository: `tamcb2708/homework-management-system`
 
 ## 1. Trạng thái khi bắt đầu chế độ Autonomous
 
@@ -38,17 +38,42 @@ Chế độ autonomous yêu cầu không dừng lại hỏi từng module. Các 
 
 | # | Phase | Nội dung | Trạng thái |
 |---|---|---|---|
-| 1 | Requirement & Architecture | Bổ sung `api-specification.md`, cập nhật thiết kế theo điều chỉnh §3 | Đang làm |
-| 2 | Foundation | Monorepo, Prisma + migration + RLS + roles, NestJS (config, logging, lỗi, validation, Swagger), auth 2 realm, RBAC, tenant context | Đang làm |
-| 3 | Core modules | Platform, trường, người dùng, GV, HS, lớp, môn, năm học, bài tập, câu hỏi, bài nộp, file, thông báo | Chưa |
-| 4 | Grading | Tự động, thủ công, rubric, lịch sử, công bố, yêu cầu nộp lại, AI gates (DISABLED) | Chưa |
-| 5 | Dashboard | Platform, School Admin, Teacher, Student + xuất Excel | Chưa |
-| 6 | UI/UX | Design system, responsive, trạng thái loading/empty/error, toast, dialog | Chưa |
-| 7 | Testing | Typecheck, lint, unit, integration (DB thật), tenant isolation, E2E Playwright | Chưa |
-| 8 | Deployment | Dockerfile, docker-compose, Nginx, script triển khai, hướng dẫn staging, local preview | Chưa |
+| 1 | Requirement & Architecture | `api-specification.md` (sinh từ OpenAPI), cập nhật thiết kế theo điều chỉnh §3 | ✅ |
+| 2 | Foundation | Monorepo, Prisma + migration + RLS + roles, NestJS (config, logging, lỗi, validation, Swagger), auth 2 realm, RBAC, tenant context | ✅ |
+| 3 | Core modules | Platform, trường, người dùng, GV, HS, lớp, môn, năm học, bài tập, câu hỏi, bài nộp, file, thông báo | ✅ |
+| 4 | Grading | Tự động, thủ công, rubric, lịch sử, công bố, yêu cầu nộp lại, AI gates (DISABLED) | ✅ (AI pipeline gọi nhà cung cấp chưa bật – D11) |
+| 5 | Dashboard | Platform, School Admin, Teacher, Student + xuất Excel | ✅ |
+| 6 | UI/UX | Design system, responsive, trạng thái loading/empty/error, toast, dialog | ✅ |
+| 7 | Testing | Typecheck, lint, unit, integration (DB thật), tenant isolation, E2E Playwright | ✅ 26 unit + 38 integration + 12 E2E |
+| 8 | Deployment | Dockerfile, docker-compose, Nginx, script triển khai, hướng dẫn staging, local preview | ⚠️ File sẵn sàng, preview cục bộ chạy; **chưa có URL công khai** (thiếu hosting) |
 
 Chi tiết chức năng đã có / còn thiếu / lỗi tồn tại được cập nhật ở cuối quá trình (mục 5).
 
-## 5. Kết quả (cập nhật khi hoàn tất)
+## 5. Kết quả
 
-_Sẽ cập nhật._
+### 5.1 Chức năng đã có (đã kiểm thử)
+
+- **Nền tảng & bảo mật**: multi-tenant (RLS FORCE + khóa ngoại kép + tenant context theo transaction), 3 role DB, cookie `__Host-` httpOnly, CSRF gắn phiên + kiểm tra Origin, refresh xoay vòng + phát hiện dùng lại, khóa tạm khi đăng nhập sai, rate limit, Argon2id, mật khẩu tạm ngẫu nhiên, đổi mật khẩu bắt buộc, audit append-only (truy cập nhạy cảm có lý do), log JSON che dữ liệu nhạy cảm, Swagger.
+- **Platform Admin**: thống kê, tạo/tạm ngưng/kích hoạt trường (kèm School Admin đầu tiên), nhật ký nền tảng, công tắc AI.
+- **School Admin**: dashboard, giáo viên/học sinh (tạo, sửa, khóa, reset mật khẩu, lọc, tìm kiếm, phân trang), lớp (ghi danh, phân công), môn, năm học/học kỳ, bài tập toàn trường + xem bài làm có audit, nhật ký, cấu hình.
+- **Teacher**: dashboard, lớp/học sinh/lịch sử học tập, soạn bài tập 6 loại câu (Mixed), rubric có version, công thức KaTeX, tệp đính kèm, giao bài (lớp/nhiều lớp/từng HS, lên lịch, nộp muộn, nộp lại, giới hạn lượt), thu hồi/khôi phục/nhân bản/lưu trữ, theo dõi trạng thái, chấm tự động + thủ công + rubric, lịch sử điểm, công bố từng bài/hàng loạt, yêu cầu nộp lại, sửa đáp án → chấm lại, xuất Excel.
+- **Student**: dashboard, danh sách + bộ lọc, làm bài (autosave có revision, đồng hồ theo giờ server, tự nộp khi hết giờ, rich text, nộp tệp), nộp idempotent, nộp lại, xem kết quả theo chính sách đáp án, kết quả học tập.
+- **Thông báo**: bài mới, sắp đến hạn, bài nộp mới (gom nhóm), đã công bố điểm, điểm được sửa, yêu cầu nộp lại; chuông + trang thông báo, đánh dấu đã đọc.
+- **AI grading (DISABLED)**: 5 cổng kích hoạt, bộ ẩn danh, validator output, provider tắt/giả lập (giả lập bị cấm ở production), từ chối 409 khi cổng đóng.
+
+### 5.2 Chức năng còn thiếu / ngoài MVP
+
+| Hạng mục | Ghi chú |
+|---|---|
+| URL staging công khai | Cần hosting/VPS hoặc cho phép tunnel (deployment.md §8) |
+| Pipeline gọi Anthropic thật | Chờ phê duyệt D11; mã chỉ có provider tắt/giả lập |
+| MFA cho Platform Admin | O-10 chưa xác nhận |
+| Import tài khoản từ Excel (ADM-03) | Chưa làm; tạo từng tài khoản qua giao diện |
+| Subdomain theo trường (O-01) | Đang dùng mã trường khi đăng nhập |
+| Giao theo nhóm, ngân hàng câu hỏi, xuất PDF | Ngoài MVP (D12) – schema đã dành sẵn |
+| Email, realtime (SSE), quét virus file, role tùy chỉnh, break-glass | ADV |
+| Chèn ảnh/công thức ngay trong trình soạn thảo tự luận | Hiện hỗ trợ định dạng văn bản; ảnh nộp qua câu "Nộp tệp" |
+
+### 5.3 Lỗi/hạn chế đang biết
+
+Xem FINAL-DELIVERY.md §16.

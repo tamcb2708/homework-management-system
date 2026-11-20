@@ -1,5 +1,7 @@
 # Architecture – Homework Management System
 
+> **Triển khai MVP:** một số điểm được điều chỉnh khi code (không Redis/BullMQ ở MVP, policy `system_access` thay cho BYPASSRLS, bản nháp ở `submissions.draft`, role cố định theo enum, upload qua API). Xem [IMPLEMENTATION-ROADMAP.md §3](./IMPLEMENTATION-ROADMAP.md). Schema thực tế: `apps/api/prisma/schema.prisma` + migrations.
+
 > **DRAFT – soạn sớm theo yêu cầu, chờ duyệt ở Phase 2.** Áp dụng các quyết định D1, D2, D3, D11, D12 trong [decisions.md](./decisions.md).
 
 ---
