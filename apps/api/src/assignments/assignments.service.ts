@@ -250,7 +250,12 @@ export class AssignmentsService {
 
   private async recomputeMaxScore(tx: Tx, assignmentId: string) {
     const agg = await tx.question.aggregate({ where: { assignmentId, deletedAt: null }, _sum: { points: true } });
-    await tx.assignment.update({ where: { id: assignmentId }, data: { maxScore: agg._sum.points ?? dec(0) } });
+    const a = await tx.assignment.findUniqueOrThrow({ where: { id: assignmentId } });
+    const max = agg._sum.points ?? dec(0);
+    if (a.status !== 'DRAFT' && a.passScore !== null && Number(a.passScore) > Number(max)) {
+      throw unprocessable('INVALID_PASS_SCORE', `Tổng điểm mới (${Number(max)}) nhỏ hơn điểm đạt (${Number(a.passScore)}). Hãy giảm điểm đạt trước.`);
+    }
+    await tx.assignment.update({ where: { id: assignmentId }, data: { maxScore: max } });
   }
 
   private async writeRubric(tx: Tx, questionId: string | null, existingRubricId: string | null, dto: QuestionDto): Promise<string | null | undefined> {
@@ -294,7 +299,7 @@ export class AssignmentsService {
           tenantId, assignmentId, ordinal: (last._max.ordinal ?? 0) + 1, type: dto.type, content: dto.content.trim(), points: dec(dto.points),
           isRequired: dto.isRequired ?? true, config: sanitizeConfig(dto.type, dto.config as any), referenceAnswer: dto.referenceAnswer ?? null,
           explanation: dto.explanation ?? null, rubricId: rubricId ?? null,
-          options: { create: (dto.options ?? []).map((o, i) => ({ tenantId, ordinal: i + 1, content: o.content.trim(), isCorrect: o.isCorrect })) },
+          options: { create: (dto.options ?? []).map((o, i) => ({ ordinal: i + 1, content: o.content.trim(), isCorrect: o.isCorrect })) },
         },
       });
       if (files.length) await tx.questionAttachment.createMany({ data: files.map((f) => ({ tenantId, questionId: q.id, fileId: f.id })) });
@@ -345,7 +350,7 @@ export class AssignmentsService {
             type: dto.type, content: dto.content.trim(), points: dec(dto.points), isRequired: dto.isRequired ?? true,
             config: sanitizeConfig(dto.type, dto.config as any), referenceAnswer: dto.referenceAnswer ?? null, explanation: dto.explanation ?? null,
             ...(rubricId !== undefined ? { rubricId } : {}), lockVersion: { increment: 1 },
-            options: { create: (dto.options ?? []).map((o, i) => ({ tenantId, ordinal: i + 1, content: o.content.trim(), isCorrect: o.isCorrect })) },
+            options: { create: (dto.options ?? []).map((o, i) => ({ ordinal: i + 1, content: o.content.trim(), isCorrect: o.isCorrect })) },
           },
         });
       }
@@ -517,7 +522,7 @@ export class AssignmentsService {
           data: {
             tenantId, assignmentId: copy.id, ordinal: q.ordinal, type: q.type, content: q.content, points: q.points, isRequired: q.isRequired,
             config: q.config as Prisma.InputJsonValue, referenceAnswer: q.referenceAnswer, explanation: q.explanation, rubricId, sourceQuestionId: q.id,
-            options: { create: q.options.map((o) => ({ tenantId, ordinal: o.ordinal, content: o.content, isCorrect: o.isCorrect })) },
+            options: { create: q.options.map((o) => ({ ordinal: o.ordinal, content: o.content, isCorrect: o.isCorrect })) },
           },
         });
         if (q.attachments.length) await tx.questionAttachment.createMany({ data: q.attachments.map((x) => ({ tenantId, questionId: nq.id, fileId: x.fileId })) });

@@ -17,6 +17,7 @@ export interface ValidatedSuggestion {
 export type ValidationOutcome = { ok: true; value: ValidatedSuggestion } | { ok: false; errors: string[] };
 
 const ALLOWED = new Set(['suggested_score', 'max_score', 'confidence', 'criteria', 'strengths', 'weaknesses', 'missing_points', 'overall_feedback', 'needs_teacher_review']);
+// eslint-disable-next-line no-control-regex -- intentionally strips control characters from AI output
 const clip = (s: unknown, n: number) => (typeof s === 'string' ? s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').slice(0, n) : '');
 const list = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 10).map((x) => clip(x, 500)) : null);
 

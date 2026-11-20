@@ -29,6 +29,7 @@ export function detectType(buf: Buffer, ext: string): string | null {
 }
 
 export function safeFilename(name: string): string {
+  // eslint-disable-next-line no-control-regex -- intentionally removes control characters from file names
   const base = name.normalize('NFC').replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, '_').replace(/^\.+/, '').trim();
   return (base || 'tep').slice(0, 150);
 }

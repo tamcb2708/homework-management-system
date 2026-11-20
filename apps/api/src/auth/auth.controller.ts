@@ -3,6 +3,9 @@ import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+
+/** Per-IP login limit (whole computer labs share one NAT IP, so keep it moderate; per-account lockout is separate). */
+const loginLimit = () => Number(process.env.LOGIN_RATE_LIMIT ?? 30);
 import { PlatformAuthService } from './platform-auth.service';
 import { TenantDirectory } from './tenant-directory.service';
 import { AllowPendingPassword, PlatformRealm, Public } from '../common/decorators';
@@ -21,7 +24,7 @@ export class AuthController {
     return this.tenants.publicInfo(code);
   }
 
-  @Public() @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Public() @Throttle({ default: { limit: loginLimit, ttl: 60_000 } })
   @Post('login') @HttpCode(200)
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const r = await this.auth.login(dto.schoolCode, dto.identifier, dto.password);
@@ -54,7 +57,7 @@ export class AuthController {
     return this.auth.profile();
   }
 
-  @AllowPendingPassword() @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @AllowPendingPassword() @Throttle({ default: { limit: loginLimit, ttl: 60_000 } })
   @Post('change-password') @HttpCode(200)
   async changePassword(@Body() dto: ChangePasswordDto, @Res({ passthrough: true }) res: Response) {
     const r = await this.auth.changePassword(dto.currentPassword, dto.newPassword);
@@ -68,7 +71,7 @@ export class AuthController {
 export class PlatformAuthController {
   constructor(private readonly auth: PlatformAuthService) {}
 
-  @Public() @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Public() @Throttle({ default: { limit: loginLimit, ttl: 60_000 } })
   @Post('login') @HttpCode(200)
   async login(@Body() dto: PlatformLoginDto, @Res({ passthrough: true }) res: Response) {
     const r = await this.auth.login(dto.email, dto.password);

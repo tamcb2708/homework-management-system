@@ -17,24 +17,28 @@ export class PlatformAuthService {
 
   async login(email: string, password: string) {
     const e = normalizeIdentifier(email);
-    return this.db.system(async (tx) => {
-      const u = await tx.platformUser.findUnique({ where: { email: e } });
-      if (u?.lockedUntil && u.lockedUntil > new Date()) {
-        throw new AppError(HttpStatus.TOO_MANY_REQUESTS, 'ACCOUNT_TEMP_LOCKED', 'Tài khoản tạm khóa do đăng nhập sai nhiều lần.');
-      }
-      const ok = await verifyPassword(u?.passwordHash, password);
-      if (!u || !ok) {
-        if (u) {
-          const failed = u.failedLoginCount + 1;
+    const u0 = await this.db.systemClient.platformUser.findUnique({ where: { email: e } });
+    if (u0?.lockedUntil && u0.lockedUntil > new Date()) {
+      throw new AppError(HttpStatus.TOO_MANY_REQUESTS, 'ACCOUNT_TEMP_LOCKED', 'Tài khoản tạm khóa do đăng nhập sai nhiều lần.');
+    }
+    const ok = await verifyPassword(u0?.passwordHash, password);
+    if (!u0 || !ok) {
+      if (u0) {
+        // Own transaction: must persist even though we refuse the login.
+        await this.db.system(async (tx) => {
+          const failed = u0.failedLoginCount + 1;
           await tx.platformUser.update({
-            where: { id: u.id },
+            where: { id: u0.id },
             data: { failedLoginCount: failed, lockedUntil: failed >= 5 ? new Date(Date.now() + Math.min(60, 5 * 2 ** (failed - 5)) * 60_000) : null },
           });
-          await this.audit.platform(tx, { action: 'platform.auth.login.failed', resourceType: 'platform_user', resourceId: u.id });
-        }
-        throw unauthorized('INVALID_CREDENTIALS', 'Thông tin đăng nhập không đúng.');
+          await this.audit.platform(tx, { action: 'platform.auth.login.failed', resourceType: 'platform_user', resourceId: u0.id });
+        });
       }
-      if (u.status !== 'ACTIVE') throw unauthorized('ACCOUNT_LOCKED', 'Tài khoản đã bị khóa.');
+      throw unauthorized('INVALID_CREDENTIALS', 'Thông tin đăng nhập không đúng.');
+    }
+    if (u0.status !== 'ACTIVE') throw unauthorized('ACCOUNT_LOCKED', 'Tài khoản đã bị khóa.');
+    return this.db.system(async (tx) => {
+      const u = u0;
       await tx.platformUser.update({ where: { id: u.id }, data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() } });
       const issued = await this.issue(tx, u.id, randomUUID());
       await this.audit.platform(tx, { action: 'platform.auth.login.success', resourceType: 'platform_user', resourceId: u.id });
@@ -63,7 +67,7 @@ export class PlatformAuthService {
   async refresh(token: string | undefined): Promise<IssuedSession> {
     const [sid, secret] = (token ?? '').split('.');
     if (!sid || !secret || !/^[0-9a-f-]{36}$/i.test(sid)) throw unauthorized('SESSION_EXPIRED', 'Phiên đăng nhập đã hết hạn.');
-    return this.db.system(async (tx) => {
+    const r = await this.db.system(async (tx): Promise<{ issued: IssuedSession } | { reuseFamily: string }> => {
       const s = await tx.platformSession.findUnique({ where: { id: sid }, include: { user: true } });
       const now = new Date();
       if (!s || !safeEqualHex(s.refreshTokenHash, sha256(secret)) || s.revokedAt || s.expiresAt < now || s.user.status !== 'ACTIVE') {
@@ -71,12 +75,14 @@ export class PlatformAuthService {
       }
       if (s.replacedAt) {
         if (now.getTime() - s.replacedAt.getTime() < 10_000) throw conflict('REFRESH_RETRY', 'Vui lòng thử lại.');
-        await tx.platformSession.updateMany({ where: { familyId: s.familyId, revokedAt: null }, data: { revokedAt: now } });
-        throw unauthorized('SESSION_EXPIRED', 'Phiên đăng nhập đã hết hạn.');
+        return { reuseFamily: s.familyId };
       }
       await tx.platformSession.update({ where: { id: s.id }, data: { replacedAt: now } });
-      return this.issue(tx, s.platformUserId, s.familyId, s.expiresAt);
+      return { issued: await this.issue(tx, s.platformUserId, s.familyId, s.expiresAt) };
     });
+    if ('issued' in r) return r.issued;
+    await this.db.system((tx) => tx.platformSession.updateMany({ where: { familyId: r.reuseFamily, revokedAt: null }, data: { revokedAt: new Date() } }));
+    throw unauthorized('SESSION_EXPIRED', 'Phiên đăng nhập đã hết hạn.');
   }
 
   async validate(sub: string, sid: string) {
