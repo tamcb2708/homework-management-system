@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { EmptyState, ErrorState, LoadingStats, PageHeader, ProgressBar, StatCard } from '@/components/ui/blocks';
 import { Badge, Card, CardHeader } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
-import { ASSIGNMENT_STATUS, fmtDateTime } from '@/lib/format';
+import { actionLabel, ASSIGNMENT_STATUS, fmtDateTime } from '@/lib/format';
 
 export default function AdminDashboard() {
   const q = useQuery({ queryKey: ['admin-dashboard'], queryFn: () => api<any>('/api/admin/dashboard') });
@@ -45,7 +45,7 @@ export default function AdminDashboard() {
             <ul className="divide-y divide-line">
               {d?.recentActivity.map((a: any) => (
                 <li key={a.id} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
-                  <span className="min-w-0 truncate"><span className="font-medium">{a.actor}</span> · <code className="text-xs text-ink-soft">{a.action}</code> {a.isSensitive && <Badge tone="danger">nhạy cảm</Badge>}</span>
+                  <span className="min-w-0 truncate"><span className="font-medium">{a.actor}</span> · <span className="text-ink-muted">{actionLabel(a.action)}</span> {a.isSensitive && <Badge tone="danger">nhạy cảm</Badge>}</span>
                   <span className="shrink-0 text-xs text-ink-faint">{fmtDateTime(a.createdAt)}</span>
                 </li>
               ))}

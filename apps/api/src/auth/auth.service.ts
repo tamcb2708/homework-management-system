@@ -45,7 +45,7 @@ export class AuthService {
         if (user.status !== 'ACTIVE') return { ok: false, kind: 'disabled', userId: user.id };
         await tx.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() } });
         const issued = await this.createSession(tx, tenant.id, user.id, user.authzVersion, randomUUID());
-        await this.audit.log(tx, { action: 'auth.login.success', resourceType: 'user', resourceId: user.id });
+        await this.audit.log(tx, { action: 'auth.login.success', resourceType: 'user', resourceId: user.id, actorUserId: user.id });
         return {
           ok: true,
           result: {
@@ -69,7 +69,7 @@ export class AuthService {
               await tx.user.update({ where: { id: u.id }, data: { lockedUntil: new Date(Date.now() + lockMinutes * 60_000) } });
             }
           }
-          await this.audit.log(tx, { action: outcome.kind === 'locked' ? 'auth.login.blocked' : 'auth.login.failed', resourceType: 'user', resourceId: outcome.userId });
+          await this.audit.log(tx, { action: outcome.kind === 'locked' ? 'auth.login.blocked' : 'auth.login.failed', resourceType: 'user', resourceId: outcome.userId, actorUserId: outcome.userId });
         });
       }
       if (outcome.kind === 'locked') throw new AppError(HttpStatus.TOO_MANY_REQUESTS, 'ACCOUNT_TEMP_LOCKED', 'Tài khoản tạm khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau.');

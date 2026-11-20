@@ -16,7 +16,7 @@ import { fmtDate } from '@/lib/format';
 const schema = z.object({
   name: z.string().trim().min(3, 'Tối thiểu 3 ký tự'),
   slug: z.string().trim().toLowerCase().regex(/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/, 'Chỉ gồm chữ thường, số, gạch ngang'),
-  maxUsers: z.coerce.number().int().min(1).max(100000).optional().or(z.literal('').transform(() => undefined)),
+  maxUsers: z.preprocess((v) => (v === '' || v === undefined ? undefined : Number(v)), z.number({ invalid_type_error: 'Phải là số' }).int().min(1, 'Tối thiểu 1').max(100000).optional()),
   adminFullName: z.string().trim().min(2, 'Nhập họ tên'),
   adminEmail: z.string().trim().email('Email không hợp lệ'),
 });

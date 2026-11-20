@@ -5,7 +5,7 @@ import { Suspense, useState } from 'react';
 import { EmptyState, ErrorState, LoadingBlock, PageHeader, Pagination, SearchInput, Table, Td } from '@/components/ui/blocks';
 import { Badge, Card, Checkbox } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
-import { fmtDateTime } from '@/lib/format';
+import { actionLabel, fmtDateTime } from '@/lib/format';
 
 function Audit() {
   const params = useSearchParams();
@@ -27,7 +27,7 @@ function Audit() {
               <tr key={l.id}>
                 <Td className="whitespace-nowrap text-[13px] text-ink-soft">{fmtDateTime(l.createdAt)}</Td>
                 <Td className="text-[13px]">{l.actor ? l.actor.fullName : l.actorType === 'SYSTEM' ? 'Hệ thống' : 'Nền tảng'}</Td>
-                <Td><code className="text-xs">{l.action}</code> {l.isSensitive && <Badge tone="danger">nhạy cảm</Badge>}</Td>
+                <Td><span className="text-[13px]">{actionLabel(l.action)}</span> <code className="block text-[11px] text-ink-faint">{l.action}</code> {l.isSensitive && <Badge tone="danger">nhạy cảm</Badge>}</Td>
                 <Td className="text-xs text-ink-soft">{l.resourceType}{l.resourceId ? ` · ${String(l.resourceId).slice(0, 8)}` : ''}</Td>
                 <Td className="max-w-[240px] truncate text-[13px]">{l.reason ?? ''}</Td>
                 <Td className="text-xs text-ink-soft">{l.ip}</Td>

@@ -1,5 +1,5 @@
 'use client';
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { cloneElement, forwardRef, isValidElement, useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -47,12 +47,18 @@ export function Checkbox({ label, className, ...p }: InputHTMLAttributes<HTMLInp
   );
 }
 
+/** Label + control + hint/error. Associates the label with a single child control automatically (a11y). */
 export function Field({ label, error, hint, required, children, className, htmlFor }: { label?: ReactNode; error?: string; hint?: ReactNode; required?: boolean; children: ReactNode; className?: string; htmlFor?: string }) {
+  const autoId = useId();
+  const msgId = `${autoId}-msg`;
+  const child = isValidElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }>(children) && typeof children.type !== 'string' || (isValidElement(children) && ['input', 'select', 'textarea'].includes(children.type as string)) ? (children as React.ReactElement<any>) : null;
+  const id = htmlFor ?? child?.props.id ?? autoId;
+  const control = child && !htmlFor ? cloneElement(child, { id, 'aria-describedby': error || hint ? msgId : undefined, 'aria-invalid': error ? true : undefined, 'aria-required': required || undefined }) : children;
   return (
     <div className={cn('space-y-1.5', className)}>
-      {label && <label htmlFor={htmlFor} className="block text-[13px] font-medium text-ink">{label}{required && <span className="text-danger"> *</span>}</label>}
-      {children}
-      {error ? <p className="text-xs text-danger" role="alert">{error}</p> : hint ? <p className="text-xs text-ink-soft">{hint}</p> : null}
+      {label && <label htmlFor={child || htmlFor ? id : undefined} className="block text-[13px] font-medium text-ink">{label}{required && <span className="text-danger" aria-hidden="true"> *</span>}</label>}
+      {control}
+      {error ? <p id={msgId} className="text-xs text-danger" role="alert">{error}</p> : hint ? <p id={msgId} className="text-xs text-ink-soft">{hint}</p> : null}
     </div>
   );
 }

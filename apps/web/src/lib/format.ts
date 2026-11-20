@@ -106,3 +106,23 @@ export function homeFor(roles: string[]) {
   for (const r of ['SCHOOL_ADMIN', 'TEACHER', 'STUDENT']) if (roles.includes(r)) return ROLE_HOME[r];
   return '/login';
 }
+
+const ACTIONS: Record<string, string> = {
+  'auth.login.success': 'Đăng nhập', 'auth.login.failed': 'Đăng nhập sai', 'auth.login.blocked': 'Đăng nhập bị chặn (tạm khóa)', 'auth.logout': 'Đăng xuất',
+  'auth.logout_all': 'Đăng xuất mọi thiết bị', 'auth.password.changed': 'Đổi mật khẩu', 'auth.refresh.reuse_detected': 'Phát hiện dùng lại phiên cũ',
+  'user.create': 'Tạo tài khoản', 'user.update': 'Sửa tài khoản', 'user.lock': 'Khóa tài khoản', 'user.unlock': 'Mở khóa tài khoản', 'user.password.reset': 'Đặt lại mật khẩu',
+  'class.create': 'Tạo lớp', 'class.update': 'Sửa lớp', 'class.enroll': 'Thêm học sinh vào lớp', 'class.unenroll': 'Gỡ học sinh khỏi lớp',
+  'teaching_assignment.create': 'Phân công giảng dạy', 'teaching_assignment.remove': 'Gỡ phân công', 'subject.create': 'Tạo môn học', 'subject.update': 'Sửa môn học',
+  'school_year.create': 'Tạo năm học', 'school_year.update': 'Sửa năm học', 'semester.create': 'Tạo học kỳ', 'semester.delete': 'Xóa học kỳ',
+  'assignment.create': 'Tạo bài tập', 'assignment.update': 'Sửa bài tập', 'assignment.publish': 'Giao bài', 'assignment.auto_publish': 'Tự động giao bài theo lịch',
+  'assignment.revoke': 'Thu hồi bài tập', 'assignment.restore': 'Khôi phục bài tập', 'assignment.archive': 'Lưu trữ bài tập', 'assignment.duplicate': 'Nhân bản bài tập', 'assignment.delete': 'Xóa bài nháp',
+  'question.create': 'Thêm câu hỏi', 'question.update': 'Sửa câu hỏi', 'question.delete': 'Xóa câu hỏi', 'question.reorder': 'Sắp xếp câu hỏi',
+  'submission.start': 'Bắt đầu làm bài', 'submission.submit': 'Nộp bài', 'submission.auto_submit': 'Tự nộp khi hết giờ', 'submission.return': 'Yêu cầu nộp lại',
+  'submission.resume_returned': 'Làm lại bài được trả', 'submission.resubmit_start': 'Bắt đầu nộp lại', 'submission.content.read': 'Xem nội dung bài làm',
+  'grade.update': 'Chấm / sửa điểm', 'grade.feedback': 'Nhận xét bài làm', 'grade.publish': 'Công bố điểm', 'report.export': 'Xuất báo cáo',
+  'file.upload': 'Tải tệp lên', 'tenant.settings.update': 'Cập nhật cấu hình trường', 'ai_grading.request_denied': 'Yêu cầu AI bị từ chối (AI tắt)', 'tenant.provisioned': 'Khởi tạo trường',
+};
+
+export function actionLabel(code: string) {
+  return ACTIONS[code] ?? code;
+}

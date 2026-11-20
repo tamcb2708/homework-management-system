@@ -10,6 +10,8 @@ export interface AuditEntry {
   isSensitive?: boolean;
   reason?: string;
   metadata?: Record<string, unknown>;
+  /** Actor when the request context has no authenticated user yet (e.g. a login attempt). */
+  actorUserId?: string;
 }
 
 /** Append-only audit trail (D7.3). Must be called inside the same transaction as the audited change/read. */
@@ -22,8 +24,8 @@ export class AuditService {
     await tx.auditLog.create({
       data: {
         tenantId,
-        actorType: c?.user ? 'USER' : c?.platformUserId ? 'PLATFORM' : 'SYSTEM',
-        actorUserId: c?.user?.id,
+        actorType: c?.user || e.actorUserId ? 'USER' : c?.platformUserId ? 'PLATFORM' : 'SYSTEM',
+        actorUserId: c?.user?.id ?? e.actorUserId,
         actorPlatformUserId: c?.platformUserId,
         action: e.action,
         resourceType: e.resourceType,

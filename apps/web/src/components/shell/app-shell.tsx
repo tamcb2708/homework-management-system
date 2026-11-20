@@ -56,7 +56,7 @@ export function AppShell({ nav, roleLabel, userName, orgName, onLogout, children
         {showBell && ready && <NotificationBell />}
         <DM.Root>
           <DM.Trigger className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-slate-100" data-testid="user-menu">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-[13px] font-semibold text-primary">{(userName ?? '?').split(' ').pop()?.[0]}</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-[13px] font-semibold text-primary">{initial(userName)}</span>
             <span className="hidden text-left sm:block">
               <span className="block max-w-[180px] truncate text-[13px] font-medium text-ink">{userName}</span>
               <span className="block text-[11px] text-ink-soft">{roleLabel}</span>
@@ -77,4 +77,9 @@ export function AppShell({ nav, roleLabel, userName, orgName, onLogout, children
       </main>
     </div>
   );
+}
+
+function initial(name?: string) {
+  const words = (name ?? '?').replace(/\(.*?\)/g, '').trim().split(/\s+/);
+  return (words[words.length - 1]?.[0] ?? '?').toUpperCase();
 }

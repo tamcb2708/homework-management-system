@@ -3,7 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -16,7 +16,7 @@ const schema = z.object({
   code: z.string().trim().regex(/^[A-Za-z0-9_.-]{1,20}$/, 'Mã lớp 1–20 ký tự: chữ, số, . _ -'),
   name: z.string().trim().min(1, 'Nhập tên lớp').max(100),
   schoolYearId: z.string().uuid('Chọn năm học'),
-  gradeLevel: z.coerce.number().int().min(1).max(12).optional(),
+  gradeLevel: z.preprocess((v) => (v === '' || v === null || v === undefined ? undefined : Number(v)), z.number({ invalid_type_error: 'Khối phải là số' }).int('Khối phải là số nguyên').min(1, 'Khối từ 1 đến 12').max(12, 'Khối từ 1 đến 12').optional()),
   homeroomTeacherId: z.string().optional(),
 });
 
@@ -28,6 +28,11 @@ export default function ClassesPage() {
   const years = useQuery({ queryKey: ['school-years'], queryFn: () => api<any[]>('/api/admin/school-years') });
   const teachers = useQuery({ queryKey: ['users', 'teachers-all'], queryFn: () => api<any>('/api/admin/users?role=TEACHER&pageSize=100') });
   const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema) as any });
+  // Preselect the current school year once the list arrives (the dialog may open before it loads).
+  useEffect(() => {
+    const cur = years.data?.find((y) => y.isCurrent)?.id;
+    if (open && cur && !form.getValues('schoolYearId')) form.setValue('schoolYearId', cur);
+  }, [open, years.data, form]);
   const rows = (list.data ?? []).filter((c) => !q || `${c.code} ${c.name}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <>
