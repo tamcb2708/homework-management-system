@@ -122,3 +122,30 @@ Môi trường phát triển hiện tại **không thể** tạo URL công khai:
 1. **VPS** (khuyến nghị): địa chỉ IP + quyền SSH (hoặc chủ dự án tự chạy `scripts/deploy-staging.sh`) + một domain/subdomain.
 2. **Tài khoản PaaS** (Render/Railway/Fly.io) có gói phù hợp + API token, kèm phê duyệt chi phí nếu có.
 3. Cho phép môi trường phát triển kết nối tới dịch vụ tunnel (ví dụ thêm host của Cloudflare Tunnel vào allowlist mạng) để tạo **URL tạm thời** từ bản đang chạy ở đây.
+
+## 9. Render + Neon (gói miễn phí)
+
+Một web service trên Render chạy cả API và web trong cùng container (`Dockerfile.render`, entrypoint `scripts/render-start.sh`); cơ sở dữ liệu là một project PostgreSQL miễn phí trên Neon. Cấu hình nằm trong `render.yaml` (Blueprint).
+
+### 9.1 Neon
+1. Tạo tài khoản tại neon.tech → **New project**, region **AWS Asia Pacific (Singapore)**, PostgreSQL 16 hoặc 17.
+2. **Connect** → tắt **Connection pooling** → sao chép connection string của role `neondb_owner` (dạng `postgresql://neondb_owner:...@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require`).
+
+### 9.2 Render
+1. Tạo tài khoản tại render.com (đăng nhập bằng GitHub) → **New → Blueprint** → chọn repository này, nhánh chứa `render.yaml`.
+2. Render hỏi các giá trị `sync: false`:
+   - `ADMIN_DATABASE_URL` = connection string Neon ở trên.
+   - `DEMO_PASSWORD_PLATFORM / ADMIN / TEACHER / STUDENT` = mật khẩu tài khoản demo (≥ 12 ký tự, tự đặt).
+3. **Apply**. Lần build đầu mất khoảng 5–10 phút. Các secret còn lại (`JWT_SECRET`, mật khẩu role DB…) do Render tự sinh.
+4. URL: `https://homework-management.onrender.com` (Render thêm hậu tố nếu tên đã có người dùng). `APP_ORIGINS` tự lấy từ `RENDER_EXTERNAL_URL`.
+
+### 9.3 Mỗi lần khởi động container
+`render-start.sh` tạo/đồng bộ ba role DB (`scripts/sql/roles.sql`, chạy được với admin không phải superuser như `neondb_owner`), chạy migration bằng `hms_owner`, seed demo nếu `SEED_DEMO=true` (idempotent), rồi chạy API ở `127.0.0.1:4000` và web ở `$PORT`. Đã kiểm chứng trên cụm PostgreSQL 16 với admin chỉ có `CREATEROLE CREATEDB`, chạy lại lần hai và khi mật khẩu role đổi.
+
+### 9.4 Giới hạn của gói miễn phí
+| Hạng mục | Ảnh hưởng |
+|---|---|
+| Render free ngủ sau 15 phút không có truy cập | Lần mở đầu tiên sau đó chờ khoảng 30–60 giây |
+| Ổ đĩa Render free là tạm thời | Tệp tải lên (đính kèm, bài nộp dạng tệp) mất khi deploy lại hoặc khi service khởi động lại. Dùng lâu dài: đặt `STORAGE_DRIVER=s3` với bucket private |
+| Neon free tự tạm dừng compute khi rảnh | Truy vấn đầu tiên chậm thêm vài giây (`connect_timeout=30` đã được đặt) |
+| Rate limit đăng nhập theo IP | API thấy IP thật của người dùng qua `X-Forwarded-For` do Render thêm vào |

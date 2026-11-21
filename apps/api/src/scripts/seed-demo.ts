@@ -48,8 +48,13 @@ function writeCredentials() {
   const file = join(process.cwd(), '..', '..', '.demo-credentials.local');
   if (!Object.keys(creds).length) return console.log('No password changes (existing accounts kept their passwords).');
   const lines = ['# Demo credentials (STAGING ONLY – do not commit, do not reuse in production)', `# School code: ${SLUG}`, ...Object.entries(creds).map(([k, v]) => `${k}=${v}`)];
-  writeFileSync(file, lines.join('\n') + '\n', { mode: 0o600, flag: 'w' });
-  console.log(`Credentials written to ${file}`);
+  try {
+    writeFileSync(file, lines.join('\n') + '\n', { mode: 0o600, flag: 'w' });
+    console.log(`Credentials written to ${file}`);
+  } catch (e) {
+    // Read-only image filesystem (containers): passwords came from DEMO_PASSWORD_* or must be reset by an admin.
+    console.warn(`Could not write ${file}: ${(e as Error).message}. Passwords were not printed.`);
+  }
 }
 
 async function seed() {
