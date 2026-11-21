@@ -1,15 +1,44 @@
 # Homework Management System
 
-Nền tảng SaaS multi-tenant quản lý bài tập trực tuyến cho nhiều trường học: giáo viên tạo và giao bài, học sinh làm và nộp bài, giáo viên chấm điểm (tự động, thủ công, có AI hỗ trợ khi được phê duyệt) và công bố kết quả.
+Nền tảng SaaS multi-tenant quản lý bài tập cho trường học: giáo viên tạo và giao bài, học sinh làm, lưu nháp và nộp bài trực tuyến, hệ thống chấm tự động phần trắc nghiệm, giáo viên chấm theo rubric, nhận xét và công bố điểm. AI hỗ trợ chấm được thiết kế sẵn nhưng **tắt** cho tới khi có phê duyệt (D11).
 
-## Trạng thái
+## Cấu trúc
 
-Đang ở giai đoạn **phân tích & thiết kế** (Phase 1 hoàn tất bản 2, Phase 2 có bản nháp sớm). Chưa có mã nguồn ứng dụng.
+```
+apps/api     NestJS + Prisma (REST, Swagger /api/docs)
+apps/web     Next.js (giao diện 4 vai trò)
+e2e          Playwright (workflow A/B/C)
+docker       Nginx, khởi tạo PostgreSQL
+scripts      db-setup, deploy-staging, sinh tài liệu API
+docs         Phân tích, thiết kế, triển khai, bàn giao
+```
+
+## Chạy nhanh (PostgreSQL 16 có sẵn)
+
+```bash
+pnpm install
+cp apps/api/.env.example apps/api/.env      # điền mật khẩu DB, secret
+bash scripts/db-setup.sh                    # role + database + migration
+pnpm -r build
+cd apps/api && set -a && . ./.env && set +a && node dist/scripts/seed-demo.js && node dist/main.js
+# terminal khác:
+cd apps/web && API_INTERNAL_URL=http://localhost:4000 npx next start -p 3000
+```
+
+Mở http://localhost:3000 – mã trường `demo`. Tài khoản demo: xem `docs/FINAL-DELIVERY.md` §12 (mật khẩu ở `.demo-credentials.local`, không commit).
+
+## Kiểm thử
+
+```bash
+pnpm typecheck && pnpm lint
+cd apps/api && npx jest                     # unit + integration (PostgreSQL thật)
+npx playwright test -c e2e/playwright.config.ts
+```
+
+## Triển khai
+
+Docker Compose + Nginx: `docs/deployment.md`.
 
 ## Tài liệu
 
-Xem [docs/README.md](docs/README.md). Quyết định đã xác nhận và câu hỏi mở: [docs/decisions.md](docs/decisions.md).
-
-## Stack dự kiến
-
-Next.js · React · TypeScript · NestJS · PostgreSQL (RLS) · Prisma · Redis/BullMQ · S3-compatible storage · Docker · Nginx
+[docs/README.md](docs/README.md) · Bàn giao: [docs/FINAL-DELIVERY.md](docs/FINAL-DELIVERY.md) · Hướng dẫn sử dụng: [docs/user-guide.md](docs/user-guide.md)

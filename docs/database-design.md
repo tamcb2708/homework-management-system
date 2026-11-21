@@ -1,5 +1,7 @@
 # Database Design – Homework Management System
 
+> **Triển khai MVP:** một số điểm được điều chỉnh khi code (không Redis/BullMQ ở MVP, policy `system_access` thay cho BYPASSRLS, bản nháp ở `submissions.draft`, role cố định theo enum, upload qua API). Xem [IMPLEMENTATION-ROADMAP.md §3](./IMPLEMENTATION-ROADMAP.md). Schema thực tế: `apps/api/prisma/schema.prisma` + migrations.
+
 > **DRAFT – soạn sớm theo yêu cầu, chờ duyệt ở Phase 2.** Sơ đồ quan hệ: [erd.md](./erd.md). Cơ chế cô lập tenant: [architecture.md §3](./architecture.md#3-multi-tenancy).
 > Đây là thiết kế logic. Schema Prisma và migration sẽ được viết ở Phase 3 sau khi bản này được duyệt (quy tắc: không đổi schema mà không có migration).
 

@@ -1,0 +1,26 @@
+@import '@fontsource-variable/plus-jakarta-sans';
+@import 'katex/dist/katex.min.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply bg-canvas text-ink antialiased; font-feature-settings: 'cv11'; }
+  *:focus-visible { @apply outline-none ring-2 ring-primary-ring ring-offset-1; }
+}
+
+@layer components {
+  .card { @apply rounded-2xl border border-line bg-white shadow-card; }
+  .input-base { @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-faint transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-ring disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-ink-soft; }
+  .prose-answer p { @apply my-1; }
+  .prose-answer ul { @apply my-1 list-disc pl-5; }
+  .prose-answer ol { @apply my-1 list-decimal pl-5; }
+  .prose-answer h1 { @apply text-lg font-semibold; }
+  .prose-answer h2 { @apply text-base font-semibold; }
+  .prose-answer h3 { @apply font-semibold; }
+  .prose-answer blockquote { @apply border-l-2 border-slate-300 pl-3 text-ink-muted; }
+  .prose-answer code { @apply rounded bg-slate-100 px-1 text-[13px]; }
+  .ProseMirror { @apply min-h-[160px] outline-none; }
+  .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); @apply pointer-events-none float-left h-0 text-ink-faint; }
+}
