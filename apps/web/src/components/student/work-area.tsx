@@ -11,7 +11,7 @@ import { ProgressBar } from '@/components/ui/blocks';
 import { Dialog } from '@/components/ui/dialog';
 import { Badge, Button, Card, Input } from '@/components/ui/primitives';
 import { api, ApiError, errorMessage } from '@/lib/api';
-import { fmtDateTime, QUESTION_TYPE } from '@/lib/format';
+import { fmtDateTime, fmtTime, QUESTION_TYPE } from '@/lib/format';
 import { cn, newIdempotencyKey } from '@/lib/utils';
 
 type Answers = Record<string, any>;
@@ -155,7 +155,7 @@ export function WorkArea({ detail, onSubmitted, onStale }: { detail: any; onSubm
       <div className="space-y-4 lg:sticky lg:top-20 lg:h-fit">
         {remaining !== null && (
           <Card className={cn('p-4', remaining < 5 * 60_000 && 'border-red-200 bg-danger-soft')}>
-            <div className="flex items-center gap-2 text-[13px] text-ink-soft"><Timer className="h-4 w-4" /> Thời gian còn lại</div>
+            <div className="flex items-center gap-2 text-[13px] text-ink-soft"><Timer className="h-4 w-4" /> {a.timeLimitMinutes ? 'Thời gian làm bài còn lại' : 'Còn đến hạn nộp'}</div>
             <div className={cn('mt-1 text-3xl font-semibold tabular-nums', remaining < 5 * 60_000 ? 'text-danger' : 'text-ink')} data-testid="countdown">{fmtCountdown(remaining)}</div>
           </Card>
         )}
@@ -170,7 +170,7 @@ export function WorkArea({ detail, onSubmitted, onStale }: { detail: any; onSubm
           </div>
           <div className="mt-4 flex items-center gap-2 text-[13px]" aria-live="polite" data-testid="save-state">
             {save === 'saving' && <><Loader2 className="h-4 w-4 animate-spin text-primary" /> Đang lưu…</>}
-            {save === 'saved' && <><Cloud className="h-4 w-4 text-success" /> Đã lưu nháp {savedAt ? fmtDateTime(savedAt).slice(-5) : ''}</>}
+            {save === 'saved' && <><Cloud className="h-4 w-4 text-success" /> Đã lưu nháp {savedAt ? fmtTime(savedAt) : ''}</>}
             {save === 'idle' && (savedAt ? <><Cloud className="h-4 w-4 text-ink-faint" /> Lưu lần cuối {fmtDateTime(savedAt).slice(-5)}</> : <span className="text-ink-faint">Bài làm được tự động lưu</span>)}
             {save === 'offline' && <><CloudOff className="h-4 w-4 text-warning" /> Mất kết nối – đang thử lại</>}
             {save === 'error' && <><AlertTriangle className="h-4 w-4 text-danger" /> Chưa lưu được</>}
@@ -195,8 +195,9 @@ export function WorkArea({ detail, onSubmitted, onStale }: { detail: any; onSubm
 
 function fmtCountdown(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return `${h ? `${h}:` : ''}${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const clock = `${d || h ? `${d ? String(h).padStart(2, '0') : h}:` : ''}${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return d ? `${d} ngày ${clock}` : clock;
 }
 
 function AnswerInput({ q, value, onChange, files, onFiles }: { q: any; value: any; onChange: (v: any) => void; files: Record<string, ViewFile>; onFiles: (f: ViewFile[]) => void }) {

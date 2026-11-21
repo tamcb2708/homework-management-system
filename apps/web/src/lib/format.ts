@@ -5,6 +5,11 @@ export function fmtDateTime(v?: string | Date | null) {
   return new Intl.DateTimeFormat('vi-VN', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(v));
 }
 
+export function fmtTime(v?: string | Date | null) {
+  if (!v) return '';
+  return new Intl.DateTimeFormat('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(v));
+}
+
 export function fmtDate(v?: string | Date | null) {
   if (!v) return '—';
   return new Intl.DateTimeFormat('vi-VN', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(v));
